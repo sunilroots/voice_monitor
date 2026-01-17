@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:noise_meter/noise_meter.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sound_stream/sound_stream.dart';
 import 'package:vibration/vibration.dart';
 
 void main() {
@@ -30,14 +31,13 @@ class MonitorScreen extends StatefulWidget {
 }
 
 class _MonitorScreenState extends State<MonitorScreen> {
-  final NoiseMeter _meter = NoiseMeter();
-  StreamSubscription<NoiseReading>? _sub;
-  bool listening = false;
+  final RecorderStream _recorder = RecorderStream();
+  StreamSubscription<List<int>>? _sub;
 
+  bool listening = false;
   double currentDb = 0;
   String status = "Idle";
 
-  // custom logic
   bool wasSpeaking = false;
   int bursts = 0;
   int burstLimit = 18;
@@ -51,46 +51,50 @@ class _MonitorScreenState extends State<MonitorScreen> {
       return;
     }
 
-    // reset bursts every 10 seconds
+    // Reset speaking bursts
     resetTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       setState(() => bursts = 0);
     });
 
-    try {
-      await _meter.start();
-      _sub = _meter.noiseStream.listen((NoiseReading reading) {
-        final db = reading.meanDecibel.isFinite ? reading.meanDecibel : 0.0;
+    _recorder.initialize();
 
-        final speaking = db > 55;
-        if (speaking && !wasSpeaking) bursts++;
-        wasSpeaking = speaking;
+    _sub = _recorder.audioStream.listen((samples) {
+      double rms = sqrt(samples
+          .map((s) => s * s)
+          .reduce((a, b) => a + b)
+          .toDouble() /
+          samples.length);
 
-        String newStatus = "Calm";
-        if (db >= loudLimit) newStatus = "LOUD";
-        else if (bursts >= burstLimit) newStatus = "FAST";
+      final db = 20 * log(max(rms, 1)) / ln10;
 
-        setState(() {
-          currentDb = db;
-          status = newStatus;
-        });
+      final speaking = db > 50;
+      if (speaking && !wasSpeaking) bursts++;
+      wasSpeaking = speaking;
 
-        if (newStatus != "Calm") {
-          Vibration.vibrate(duration: 200);
-        }
-      });
+      String newStatus = "Calm";
+      if (db >= loudLimit) newStatus = "LOUD";
+      else if (bursts >= burstLimit) newStatus = "FAST";
 
       setState(() {
-        listening = true;
-        status = "Listening";
+        currentDb = db;
+        status = newStatus;
       });
-    } catch (e) {
-      setState(() => status = "Error starting meter");
-    }
+
+      if (newStatus != "Calm") {
+        Vibration.vibrate(duration: 200);
+      }
+    });
+
+    await _recorder.start();
+    setState(() {
+      listening = true;
+      status = "Listening";
+    });
   }
 
-  void stop() {
+  void stop() async {
     _sub?.cancel();
-    _meter.stop();
+    await _recorder.stop();
     resetTimer?.cancel();
 
     setState(() {
@@ -105,14 +109,14 @@ class _MonitorScreenState extends State<MonitorScreen> {
   @override
   void dispose() {
     _sub?.cancel();
-    _meter.stop();
+    _recorder.stop();
     resetTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    double meterValue = ((currentDb - 40) / 50).clamp(0.0, 1.0);
+    final meterValue = ((currentDb - 40) / 50).clamp(0.0, 1.0);
 
     return Scaffold(
       appBar: AppBar(
