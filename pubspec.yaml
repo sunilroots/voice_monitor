@@ -1,16 +1,17 @@
 name: voice_monitor_app
-description: Voice monitor app (final).
+description: Voice monitor app
 publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
+
+  noise_meter: 3.4.2
   permission_handler: ^10.4.5
-  noise_meter: ^5.0.2
   vibration: ^1.8.4
 
 flutter:
