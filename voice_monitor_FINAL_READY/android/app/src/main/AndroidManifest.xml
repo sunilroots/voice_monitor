@@ -12,9 +12,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|density|layoutDirection|uiMode">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -24,10 +22,8 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-
         </activity>
 
         <meta-data android:name="flutterEmbedding" android:value="2"/>
-
     </application>
 </manifest>
