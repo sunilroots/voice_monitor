@@ -1,1 +1,14 @@
 include ':app'
+
+def flutterProjectRoot = rootProject.projectDir.parentFile
+
+def plugins = new Properties()
+def pluginsFile = new File(flutterProjectRoot, '.flutter-plugins')
+if (pluginsFile.exists()) {
+    pluginsFile.withReader('UTF-8') { reader -> plugins.load(reader) }
+}
+
+plugins.each { name, path ->
+    include ":$name"
+    project(":$name").projectDir = new File(path, 'android')
+}
