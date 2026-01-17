@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_sound/flutter_sound.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sound_stream/sound_stream.dart';
 import 'package:vibration/vibration.dart';
 
 void main() {
@@ -15,7 +15,6 @@ class VoiceMonitorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Voice Monitor",
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       home: const MonitorScreen(),
@@ -31,8 +30,7 @@ class MonitorScreen extends StatefulWidget {
 }
 
 class _MonitorScreenState extends State<MonitorScreen> {
-  final RecorderStream _recorder = RecorderStream();
-  StreamSubscription<List<int>>? _sub;
+  FlutterSoundRecorder recorder = FlutterSoundRecorder();
 
   bool listening = false;
   double currentDb = 0;
@@ -44,6 +42,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
   double loudLimit = 75;
 
   Timer? resetTimer;
+  StreamSubscription? audioSub;
 
   Future<void> start() async {
     if (!await Permission.microphone.request().isGranted) {
@@ -51,21 +50,16 @@ class _MonitorScreenState extends State<MonitorScreen> {
       return;
     }
 
-    // Reset speaking bursts
+    await recorder.openRecorder();
+    await recorder.setSubscriptionDuration(const Duration(milliseconds: 100));
+
+    // Reset speech bursts every 10 seconds
     resetTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       setState(() => bursts = 0);
     });
 
-    _recorder.initialize();
-
-    _sub = _recorder.audioStream.listen((samples) {
-      double rms = sqrt(samples
-          .map((s) => s * s)
-          .reduce((a, b) => a + b)
-          .toDouble() /
-          samples.length);
-
-      final db = 20 * log(max(rms, 1)) / ln10;
+    audioSub = recorder.onProgress!.listen((event) {
+      final db = event.decibels ?? 0;
 
       final speaking = db > 50;
       if (speaking && !wasSpeaking) bursts++;
@@ -85,16 +79,20 @@ class _MonitorScreenState extends State<MonitorScreen> {
       }
     });
 
-    await _recorder.start();
+    await recorder.startRecorder(
+      toStream: (buffer) {},
+      codec: Codec.pcm16,
+    );
+
     setState(() {
       listening = true;
       status = "Listening";
     });
   }
 
-  void stop() async {
-    _sub?.cancel();
-    await _recorder.stop();
+  Future<void> stop() async {
+    await recorder.stopRecorder();
+    audioSub?.cancel();
     resetTimer?.cancel();
 
     setState(() {
@@ -108,8 +106,8 @@ class _MonitorScreenState extends State<MonitorScreen> {
 
   @override
   void dispose() {
-    _sub?.cancel();
-    _recorder.stop();
+    recorder.closeRecorder();
+    audioSub?.cancel();
     resetTimer?.cancel();
     super.dispose();
   }
@@ -119,9 +117,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
     final meterValue = ((currentDb - 40) / 50).clamp(0.0, 1.0);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("🎤 Voice Monitor"),
-      ),
+      appBar: AppBar(title: const Text("🎤 Voice Monitor")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -157,7 +153,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
                   ),
                 ),
               ],
-            ),
+            )
           ],
         ),
       ),
